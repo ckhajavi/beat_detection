@@ -1,0 +1,245 @@
+<head>
+<script src="http://ajax.aspnetcdn.com/ajax/jQuery/jquery-1.12.2.min.js"></script>
+</head>
+
+<canvas id="canvas" width="512" height="256" ></canvas>
+
+<p id="controls">
+  <input type="button" id="start_button" value="Start">
+  &nbsp; &nbsp;
+  <input type="button" id="stop_button" value="Stop">
+</p>
+
+<!-- ----------------------------------------------------- -->
+
+<style>
+    #canvas {
+        margin-left: auto;
+        margin-right: auto;
+        display: block;
+        background-color: black;
+    }
+    #controls {
+        text-align: center;
+    }
+    #start_button, #stop_button {
+        font-size: 16pt;
+    }
+</style>
+
+<!-- ----------------------------------------------------- -->
+
+
+<script type="text/javascript">
+
+//The following code comes from https://gist.github.com/webapprentice/7878474#file-tutorial_30_example_1-html
+
+    // Hacks to deal with different function names in different browsers
+    window.requestAnimFrame = (function(){
+      return  window.requestAnimationFrame       ||
+              window.webkitRequestAnimationFrame ||
+              window.mozRequestAnimationFrame    ||
+              function(callback, element){
+                window.setTimeout(callback, 1000 / 60);
+              };
+    })();
+
+    window.AudioContext = (function(){
+        return  window.webkitAudioContext || window.AudioContext || window.mozAudioContext;
+    })();
+
+    function squareAndSum(arr){
+        var sum = 0;
+        var element;
+        for (i = 0; i<arr.length; ++i){
+            element = Math.pow(arr[i],2);
+            element = Math.sqrt(element);
+            sum = sum + element;
+
+    }
+        return sum;
+    }
+
+    function average(arr){
+        var sum = 0;
+        for( i = 0; i < arr.length; ++i){
+            sum = sum + arr[i];
+        }
+        return sum/44;
+    }
+
+    // Global Variables for Audio
+    var audioContext;
+    var audioBuffer;
+    var sourceNode;
+    var analyserNode;
+    var javascriptNode;
+    var audioData = null;
+    var audioPlaying = false;
+    var sampleSize = 1024;  // number of samples to collect before analyzing data
+    var amplitudeArray;     // array to hold time domain data
+    var samples = [];
+
+    var sampleCount = 0;
+
+    // This must be hosted on the same server as this page - otherwise you get a Cross Site Scripting error
+    var audioUrl = "02ReadyToStart.mp3"//"https://s3-us-west-2.amazonaws.com/experiment-music/02+Ready+To+Start.mp3";
+
+    // Global Variables for the Graphics
+    var canvasWidth  = 512;
+    var canvasHeight = 256;
+    var ctx;
+    var beatDetected = false;
+
+
+    $(document).ready(function() {
+
+        ctx = $("#canvas").get()[0].getContext("2d");
+
+        // the AudioContext is the primary 'container' for all your audio node objects
+        try {
+            audioContext = new AudioContext();
+        } catch(e) {
+            alert('Web Audio API is not supported in this browser');
+        }
+
+        // When the Start button is clicked, finish setting up the audio nodes, play the sound,
+        // gather samples for the analysis, update the canvas
+        $("#start_button").on('click', function(e) {
+            e.preventDefault();
+
+            // Set up the audio Analyser, the Source Buffer and javascriptNode
+            setupAudioNodes();
+
+            // setup the event handler that is triggered every time enough samples have been collected
+            // trigger the audio analysis and draw the results
+            javascriptNode.onaudioprocess = function () {
+
+                // get the Time Domain data for this sample
+                analyserNode.getByteTimeDomainData(amplitudeArray);
+
+                // SUM samples:
+                var sampleSum;
+                sampleSum = squareAndSum(amplitudeArray);
+                
+                if (sampleCount > 44){
+                    console.log( "1 sec");
+                    var newArray = samples.slice(sampleCount - 44, sampleCount);
+                    var previousAverage = average(newArray);
+                    if (sampleSum/1024 > ( 1.05 * previousAverage)){
+                        console.log("YES");
+                        beatDetected = true;
+                    }
+                }
+                samples.push(sampleSum/1024);
+                sampleCount = sampleCount + 1;
+
+                //console.log(SampleSum);
+
+                // draw the display if the audio is playing
+                if (audioPlaying == true) {
+                    requestAnimFrame(drawTimeDomain);
+                    
+                }
+                
+            }
+
+            // Load the Audio the first time through, otherwise play it from the buffer
+            if(audioData == null) {
+                loadSound(audioUrl);
+            } else {
+                playSound(audioData);
+            }
+        });
+
+        // Stop the audio playing
+        $("#stop_button").on('click', function(e) {
+            e.preventDefault();
+            sourceNode.stop(0);
+            audioPlaying = false;
+
+            
+        });
+    });
+
+    function setupAudioNodes() {
+        sourceNode     = audioContext.createBufferSource();
+        analyserNode   = audioContext.createAnalyser();
+
+        //https://developer.mozilla.org/en-US/docs/Web/API/AudioContext/createScriptProcessor
+        javascriptNode = audioContext.createScriptProcessor(sampleSize, 1, 1);
+
+        // Create the array for the data values
+        amplitudeArray = new Uint8Array(analyserNode.frequencyBinCount);
+
+        console.log(analyserNode.frequencyBinCount);
+        console.log(sampleSize);
+        console.log(audioContext.sampleRate);
+        // Now connect the nodes together
+        sourceNode.connect(audioContext.destination);
+        sourceNode.connect(analyserNode);
+        analyserNode.connect(javascriptNode);
+        javascriptNode.connect(audioContext.destination);
+        console.log(analyserNode.sampleRate);
+    }
+
+    // Load the audio from the URL via Ajax and store it in global variable audioData
+    // Note that the audio load is asynchronous
+    function loadSound(url) {
+        var request = new XMLHttpRequest();
+        request.open('GET', url, true);
+        request.responseType = 'arraybuffer';
+
+        // When loaded, decode the data and play the sound
+        request.onload = function () {
+            audioContext.decodeAudioData(request.response, function (buffer) {
+                audioData = buffer;
+                playSound(audioData);
+            }, onError);
+        }
+        request.send();
+    }
+
+    // Play the audio and loop until stopped
+    function playSound(buffer) {
+        sourceNode.buffer = buffer;
+        sourceNode.start(0);    // Play the sound now
+        sourceNode.loop = true;
+        audioPlaying = true;
+    }
+
+    function onError(e) {
+        console.log(e);
+    }
+
+    function drawTimeDomain() {
+        clearCanvas();
+        for (var i = 0; i < amplitudeArray.length; i++) {
+            var value = amplitudeArray[i] / 256;
+            var y = canvasHeight - (canvasHeight * value) - 1;
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(i, y, 1, 1);
+
+        }
+        if (beatDetected == true){
+            wholecanvas = document.getElementById("canvas");
+            wholecanvas.style.backgroundColor = '#ff0000'
+            console.log("COLOR");
+        }
+        else{
+            wholecanvas = document.getElementById("canvas");
+            wholecanvas.style.backgroundColor = '#000000'
+        }
+        beatDetected = false;
+    }
+
+    function variance(){
+
+    }
+
+    function clearCanvas() {
+
+        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    }
+
+</script>
