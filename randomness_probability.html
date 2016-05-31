@@ -1,7 +1,7 @@
 <head>
 <script src="http://ajax.aspnetcdn.com/ajax/jQuery/jquery-1.12.2.min.js"></script>
 </head>
-<canvas id="canvas" width="800" height="256" ></canvas>
+<canvas id="canvas" width="800" height="600" ></canvas>
 
 <p id="controls">
   <input type="button" id="start_button" value="Start">
@@ -28,40 +28,10 @@
 
 <!-- ----------------------------------------------------- -->
 
+<script type="text/javascript" src="chroma.min.js"></script>
+
 <script type="text/javascript">
     // Hacks to deal with different function names in different browsers
-
-    function squareAndSum(arr){
-        var sum = 0;
-        var element;
-        for (i = 0; i<arr.length; ++i){
-            element = Math.pow(arr[i],2);
-            element = Math.sqrt(element);
-            sum = sum + element;
-
-    }
-        return sum;
-    }
-
-    function average(arr){
-        var sum = 0;
-        for( i = 0; i < arr.length; ++i){
-            sum = sum + arr[i];
-        }
-        return sum/44;
-    }
-
-    function variance(average, arr){
-        var variance = 0;
-        var diff;
-        for(i =0; i < arr.length; ++i){
-            diff = arr[i] - average;
-            variance = variance + Math.pow(diff, 2);
-
-        }
-        return variance/1024;
-    }
-
     window.requestAnimFrame = (function(){
       return  window.requestAnimationFrame       ||
               window.webkitRequestAnimationFrame ||
@@ -73,30 +43,29 @@
     window.AudioContext = (function(){
         return  window.webkitAudioContext || window.AudioContext || window.mozAudioContext;
     })();
-    // Global Variables for Audio
-    var audioContext;
+var audioContext;
     var audioBuffer;
     var sourceNode;
     var analyserNode;
     var javascriptNode;
     var audioData = null;
     var audioPlaying = false;
-    var sampleSize = 1024;  // number of samples to collect before analyzing FFT
-                            // decreasing this gives a faster sonogram, increasing it slows it down
-    var amplitudeArray;         // array to hold frequency data
+    var sampleSize = 1024;         // number of samples to collect before analyzing FFT
+    var fftSize = 1024;         // must be power of two
+    var frequencyArray;         // array to hold frequency data
     // This must be hosted on the same server as this page - otherwise you get a Cross Site Scripting error
-    var audioUrl = "190613__goup-1__drums.wav";
+    var audioUrl = "cls-asif.wav";
     // Global Variables for Drawing
     var column = 0;
     var canvasWidth  = 800;
-    var canvasHeight = 256;
+    var canvasHeight = 600;
     var ctx;
+    var fundamentalFrequencies = [];
+    // Uses the chroma.js library by Gregor Aisch to create a color gradient
+    // download from https://github.com/gka/chroma.js
+    var colorScale = new chroma.scale(['black', 'red', 'yellow', 'white']).out('hex');
 
-    var samples = [];
 
-    var sampleCount = 0;
-
-    var beatDetected = true; 
 
     $(document).ready(function() {
         // get the context from the canvas to draw on
@@ -108,48 +77,26 @@
             alert('Web Audio API is not supported in this browser');
         }
         // When the Start button is clicked, finish setting up the audio nodes, play the sound and
-        // gather samples for FFT frequency analysis, draw the sonogram
+        // gather samples for FFT frequency analysis, draw the spectrogram
         $("#start_button").click(function(e) {
             e.preventDefault();
             column = 0;
-            clearCanvas();
             // Set up / reset the audio Analyser and Source Buffer
             setupAudioNodes();
             // setup the event handler that is triggered every time enough samples have been collected
             // trigger the audio analysis and draw one column in the display based on the results
             javascriptNode.onaudioprocess = function () {
-                // get the average for the first channel
-                amplitudeArray = new Uint8Array(analyserNode.frequencyBinCount);
-                analyserNode.getByteTimeDomainData(amplitudeArray);
-
-                var sampleSum;
-                sampleSum = squareAndSum(amplitudeArray);
-                
-
-                if (sampleCount > 44){
-                    console.log( "1 sec");
-                    var newArray = samples.slice(sampleCount - 44, sampleCount);
-                    var previousAverage = average(newArray);
-                    var varianceResult = variance(previousAverage, amplitudeArray);
-                    console.log(varianceResult);
-                    if (varianceResult > 1000){
-                        beatDetected = true;
-                    }
-                    // if (sampleSum/1024 > ( 1.09 * previousAverage)){
-                    //     console.log("YES");
-                        
-                    //     beatDetected = true;
-                    // }
-                }
-                samples.push(sampleSum/1024);
-                sampleCount = sampleCount + 1;
+                console.log(frequencyArray[1]);
+                // get the Frequency Domain data for this sample
+                analyserNode.getByteFrequencyData(frequencyArray);
                 // draw one column of the spectrogram if the audio is playing
                 if (audioPlaying == true) {
-                    requestAnimFrame(drawTimeDomain);
+                    requestAnimFrame(drawSpectrogram);
                 }
             }
             // Load the Audio the first time through, otherwise play it from the buffer
             // Note that the audio load is asynchronous
+            console.log(frequencyArray[1]);
             if(audioData == null) {
                 loadSound(audioUrl);
             } else {
@@ -166,9 +113,11 @@
     function setupAudioNodes() {
         sourceNode     = audioContext.createBufferSource();
         analyserNode   = audioContext.createAnalyser();
+        analyserNode.smoothingTimeConstant = 0.0;
+        analyserNode.fftSize = fftSize;
         javascriptNode = audioContext.createScriptProcessor(sampleSize, 1, 1);
         // Create the array for the data values
-        amplitudeArray = new Uint8Array(analyserNode.frequencyBinCount);
+        frequencyArray = new Uint8Array(analyserNode.frequencyBinCount);
         // Now connect the nodes together
         sourceNode.connect(audioContext.destination);
         sourceNode.connect(analyserNode);
@@ -191,7 +140,29 @@
     }
     // Play the sound with no delay and loop over the sample until stopped
     function playSound(buffer) {
+
+        var largestFrequency = 0;
+        var frequency1;
+        var index;
+        for (var i = 0; i < frequencyArray.length; i++) {
+            // Get the color from the color map, draw 1x1 pixel rectangle
+            if (frequencyArray[i] > largestFrequency){
+                largestFrequency = frequencyArray[i];
+                index = i;
+
+            }
+
+        }
+
+        frequency1 = index *analyserNode.sampleRate/analyserNode.fftSize;
+        console.log(frequency1);
+        fundamentalFrequencies.push(frequency1);
         sourceNode.buffer = buffer;
+        var filter = audioContext.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = frequency1;
+        filter.connect(sourceNode)
+        
         sourceNode.start(0);    // Play the sound now
         sourceNode.loop = true;
         audioPlaying = true;
@@ -199,31 +170,32 @@
     function onError(e) {
         console.log(e);
     }
-    function drawTimeDomain() {
-        var minValue = 9999999;
-        var maxValue = 0;
-        for (var i = 0; i < amplitudeArray.length; i++) {
-            var value = amplitudeArray[i] / 256;
-            if(value > maxValue) {
-                maxValue = value;
-            } else if(value < minValue) {
-                minValue = value;
+    // Draw the Spectrogram from the frequency array
+    // The array has 512 elements - but truncate at 256
+    function drawSpectrogram() {
+        var largestFrequency = 0;
+        var frequency;
+        var index;
+        for (var i = 0; i < frequencyArray.length; i++) {
+            // Get the color from the color map, draw 1x1 pixel rectangle
+            if (frequencyArray[i] > largestFrequency){
+                largestFrequency = frequencyArray[i];
+                index = i;
+
             }
+            ctx.fillStyle = colorScale(frequencyArray[i] / 256.0);
+            ctx.fillRect(column,canvasHeight -i, 1, 1);
         }
-        var y_lo = canvasHeight - (canvasHeight * minValue) - 1;
-        var y_hi = canvasHeight - (canvasHeight * maxValue) - 1;
-        ctx.fillStyle = '#ffffff';
-        if(beatDetected == true){
-            ctx.fillStyle = '#ff0000'
-        }
-        ctx.fillRect(column,y_lo, 1, y_hi - y_lo);
+        frequency = index *analyserNode.sampleRate/analyserNode.fftSize;
+        fundamentalFrequencies.push(frequency);
+        ctx.fillStyle = "#00FF00"
+        ctx.fillRect(column,canvasHeight -index, 10, 10);
         // loop around the canvas when we reach the end
         column += 1;
         if(column >= canvasWidth) {
             column = 0;
             clearCanvas();
         }
-        beatDetected = false;
     }
     function clearCanvas() {
         ctx.clearRect(0, 0, canvasWidth, canvasHeight);
