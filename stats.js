@@ -7,7 +7,7 @@ function squareAndSum(arr){
             sum = sum + element;
 
     	}
-        return sum;
+        return sum/arr.length;
     }
 
 Array.max = function( array ){
@@ -17,20 +17,21 @@ Array.max = function( array ){
 
     
 function average(arr){
-    var sum = 0;
-    for( i = 0; i < arr.length; ++i){
-        sum = sum + arr[i];
+        var sum = 0;
+        for( i = 0; i < arr.length; ++i){
+            sum = sum + arr[i];
+        }
+        return sum/arr.length;
     }
-    return sum/44;
-}
 
-function variance(average, arr){
-    var variance = 0;
-    var diff;
-    for(i =0; i < arr.length; ++i){
-        diff = arr[i] - average;
-        variance = variance + Math.pow(diff, 2);
+    function variance(average, arr){
+        var variance = 0;
+        var diff;
+        for(i =0; i < arr.length; ++i){
+            diff = arr[i] - average;
+            variance = variance + Math.pow(diff, 2);
+
+        }
+        return variance/arr.length;
 
     }
-    return variance/1024;
-}

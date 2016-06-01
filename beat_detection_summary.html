@@ -1,5 +1,6 @@
 <head>
-
+<script src="http://ajax.aspnetcdn.com/ajax/jQuery/jquery-1.12.2.min.js"></script>
+<script src="stats.js" type="text/javascript"></script>
 </head>
 <canvas id="canvas" width="800" height="256" ></canvas>
 
@@ -28,8 +29,6 @@
 
 <!-- ----------------------------------------------------- -->
 
-<script src="http://ajax.aspnetcdn.com/ajax/jQuery/jquery-1.12.2.min.js"></script>
-<script src="stats.js" type="text/javascript"></script>
 <script type="text/javascript">
     // Hacks to deal with different function names in different browsers
 
@@ -98,11 +97,11 @@
                 
 
                 if (sampleCount > 44){
-                    console.log( "1 sec");
+                    //console.log( "1 sec");
                     var newArray = samples.slice(sampleCount - 44, sampleCount);
                     var previousAverage = average(newArray);
                     var varianceResult = variance(previousAverage, amplitudeArray);
-                    console.log(varianceResult);
+                    //console.log(varianceResult);
                     if (varianceResult > 1000){
                         beatDetected = true;
                     }
@@ -112,7 +111,7 @@
                     //     beatDetected = true;
                     // }
                 }
-                samples.push(sampleSum/1024);
+                samples.push(sampleSum);
                 sampleCount = sampleCount + 1;
                 // draw one column of the spectrogram if the audio is playing
                 if (audioPlaying == true) {
