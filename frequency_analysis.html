@@ -1,3 +1,4 @@
+<!-- Code for visualization taken from this tutorial: http://apprentice.craic.com/tutorials/ !-->
 <head>
 <script src="http://ajax.aspnetcdn.com/ajax/jQuery/jquery-1.12.2.min.js"></script>
 <script src="stats.js" type="text/javascript"></script>
@@ -43,7 +44,7 @@
               };
     })();
     window.AudioContext = (function(){
-        return  window.webkitAudioContext || window.AudioContext || window.mozAudioContext;
+        return  window.AudioContext || window.mozAudioContext;
     })();
 
     
@@ -51,8 +52,8 @@
     var audioContext;
     var audioBuffer;
     var sourceNode;
-    var analyserNode;           //node that passes the frequency data
-    var javascriptNode;         //node that will draw the visuals
+    var analyserNode;           //node that passes the frequency data from buffer 
+    var javascriptNode;         //node that processes audio data
     var audioData = null;
     var audioPlaying = false;
     var sampleSize = 1024;         // number of samples to collect before analyzing FFT
@@ -65,9 +66,10 @@
     var canvasWidth  = 800;
     var canvasHeight = 600;
     var ctx;
-    var averageBassEnergies = []
-    var sampleCount;
-    var beatDetected = false;
+    var averageBassEnergies = [] //average of all collected bass frequencies
+    var sampleCount;            //number of batches of 1024 samples collected so far
+    var beatDetected = false;   //boolean to measure if beat was detected
+
     // Uses the chroma.js library by Gregor Aisch to create a color gradient
     // download from https://github.com/gka/chroma.js
     var colorScale = new chroma.scale(['black', 'red', 'yellow', 'white']).out('hex');
@@ -102,8 +104,11 @@
                 // draw one column of the spectrogram if the audio is playing
                 if (audioPlaying == true) {
                     requestAnimFrame(drawSpectrogram);
+                    //separate the bass frequencies
                     instantBassBand = createBassBand(frequencyArray);
+                    //average the current samples
                     instantAverage = squareAndSum(instantBassBand);
+                    //if there is at least 1 second of audio so far aver
                     if (sampleCount > 43){
                         var newArray = averageBassEnergies.slice(sampleCount - 43, sampleCount);
                         localAverage = squareAndSum(newArray);
@@ -181,13 +186,13 @@
         var index;
         for (var i = 0; i < frequencyArray.length; i++) {
             // Get the color from the color map, draw 1x1 pixel rectangle
-
+            // Find the loudest frequency in current sample
             if (frequencyArray[i] > largestFrequency){
                 largestFrequency = frequencyArray[i];
                 index = i;
 
             }
-            //console.log(frequencyArray[i]);
+            //if beat detected color sample color rectangle purple
             if(beatDetected == true){
                 ctx.fillStyle = '#551a8b'
             }
@@ -196,13 +201,11 @@
             }
             ctx.fillRect(column,canvasHeight -i, 1, 1);
         }
+
+        //fill style for largest frequency
         ctx.fillStyle = "#00FF00"
-        //44, 86, 129,172
 
         ctx.fillRect(column,canvasHeight -index, 10, 10);
-        if(beatDetected == true){
-            ctx.fillStyle = '#ff0000'
-        }
         beatDetected = false;
         
         // loop around the canvas when we reach the end
@@ -213,12 +216,14 @@
         }
     }
 
+    //create an array with amplitude values of just bass frequencies (~40hz - 250hz)
+
     function createBassBand(arr){
         var frequency  = 0;
         var i = 1;
         var bassArray = [];
-        //console.log(arr[i]);
         while(frequency < 250.0 && i < arr.length) {
+            //frequnecy = index *sampleRate/(# of samples currently in Buffer)
             frequency = i *analyserNode.sampleRate/analyserNode.fftSize;
             bassArray.push(arr[i]);
             i = i + 1;

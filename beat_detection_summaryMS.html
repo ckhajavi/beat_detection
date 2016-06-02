@@ -41,14 +41,14 @@
               };
     })();
     window.AudioContext = (function(){
-        return  window.webkitAudioContext || window.AudioContext || window.mozAudioContext;
+        return  window.AudioContext || window.mozAudioContext;
     })();
     // Global Variables for Audio
     var audioContext;
     var audioBuffer;
     var sourceNode;
     var analyserNode;
-    var javascriptNode;
+    var javascriptNode;     //processes audio data
     var audioData = null;
     var audioPlaying = false;
     var sampleSize = 1024;  // number of samples to collect before analyzing FFT
